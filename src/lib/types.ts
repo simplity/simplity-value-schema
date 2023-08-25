@@ -67,18 +67,18 @@ export type ValueSchema = {
   valueType: ValueType;
   /**
    * defaults to 1.
-   * relevant for text type, but used, if specified in other types as well
+   * relevant for text type only
    * NOTE: unicode characters are not counted properly. Use with care.
    */
   minLength?: number;
   /**
    * defaults to 1000.
-   * relevant for text type, but used, if specified in other types as well
+   * relevant for text type only
    * NOTE: unicode characters are not counted properly. Use with care.
    */
   maxLength?: number;
   /**
-   * as per javascript RegExp syntax
+   * as per javascript RegExp syntax. relevant for text type only.
    */
   regex?: string;
   /**
@@ -106,14 +106,6 @@ export type ValueSchema = {
    * numbers will be rounded based on this.
    */
   nbrDecimalPlaces?: number;
-  /**
-   * relevant for arrays. defaults to 1
-   */
-  minRows?: number;
-  /**
-   * relevant for arrays. defaults to 100
-   */
-  maxRows?: number;
 };
 
 export type ValueSchemaError = {
