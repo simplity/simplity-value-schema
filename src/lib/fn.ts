@@ -1,10 +1,14 @@
 import {
-  GenericErrorCode,
+  DEFAULT_DAYS_RANGE,
+  DEFAULT_MAX_CHARS,
+  DEFAULT_MAX_NUMBER,
+  ValueSchemaErrorCode,
   ValidationFn,
   ValidationResult,
   Value,
   ValueSchema,
   ValueType,
+  DEFAULT_NBR_DECIMALS,
 } from './types';
 
 /**
@@ -16,85 +20,83 @@ export function createValidationFn(schema: ValueSchema): ValidationFn {
   /**
    * all the parameters required for validation
    */
-  let errorId = schema.errorId;
-  let textErrorId = errorId || GenericErrorCode.InvalidValue;
-  let minLength = schema.minLength || 1;
-  let maxLength = schema.maxLength || DEFAULT_MAX_LENGTH;
+  let minLength = schema.minLength || 0;
+  let maxLength = schema.maxLength || DEFAULT_MAX_CHARS;
   let regex = schema.regex;
   let regexp = regex ? new RegExp(regex) : undefined;
-  let minValue = 0; //we deal with business data, and hence 0 is a better default than MIN_SAFE_INTEGER
-  let maxValue = Number.MAX_SAFE_INTEGER;
+  let minValue = 0; //we deal with business data, and hence negative numbers not allowed by default
+  let maxValue = DEFAULT_MAX_NUMBER;
 
   switch (schema.valueType) {
     case ValueType.Text:
-      return createTextFn({ textErrorId, maxLength, minLength, regexp });
+      return createTextFn({
+        maxLength,
+        minLength,
+        regexp,
+      });
 
     case ValueType.Boolean:
       return validateBoolean;
 
     case ValueType.Integer:
-    case ValueType.Decimal:
       if (schema.minValue !== undefined) {
-        minValue = schema.minValue;
+        minValue = Math.round(schema.minValue);
       }
 
       if (schema.maxValue !== undefined) {
-        maxValue = schema.maxValue;
+        maxValue = Math.round(schema.maxValue);
       }
 
       return createNumberFn({
-        textErrorId: GenericErrorCode.InvalidNumber,
-        errorId: errorId || GenericErrorCode.InvalidNumber,
-        factor:
-          schema.nbrDecimalPlaces === undefined
-            ? 1
-            : 10 ** schema.nbrDecimalPlaces,
-        maxLength, //not restricting so that we get maxValue error rather than maxLength error
-        minLength,
+        factor: 1,
         maxValue,
         minValue,
-        regexp: NUMBER_REGEX, //we accept decimal values for integer!!
       });
 
-    case ValueType.Date:
+    case ValueType.Decimal:
+      let factor = DEFAULT_FACTOR;
+      let nbr = schema.nbrDecimalPlaces && schema.nbrDecimalPlaces;
+      if (nbr && nbr > 0) {
+        nbr = Math.round(nbr);
+        factor = 10 ** nbr;
+      }
+
       if (schema.minValue !== undefined) {
-        minValue = schema.minValue * MS_PER_DAY;
-      } else {
-        minValue = MAX_DATE_DIFF;
+        minValue = roundIt(schema.minValue, factor);
       }
 
       if (schema.maxValue !== undefined) {
-        maxValue = schema.maxValue * MS_PER_DAY;
-      } else {
-        maxValue = MAX_DATE_DIFF;
+        maxValue = roundIt(schema.maxValue, factor);
       }
-
-      return createDateFn({
-        textErrorId: GenericErrorCode.InvalidDate,
-        errorId: errorId || GenericErrorCode.InvalidNumber,
-        maxLength,
-        minLength: 1,
+      return createNumberFn({
+        factor,
         maxValue,
         minValue,
-        regexp: DATE_REGEX,
       });
 
+    case ValueType.Date:
     case ValueType.Timestamp:
-      return createTextFn({
-        textErrorId: GenericErrorCode.InvalidValue,
-        maxLength: 25,
-        minLength: 1,
-        regexp: TIME_STAMP_REGEX,
-      });
+      if (schema.minValue !== undefined) {
+        minValue = Math.round(schema.minValue);
+      } else {
+        minValue = -DEFAULT_DAYS_RANGE;
+      }
 
-    case ValueType.Ds:
-    case ValueType.Array:
-      //TODO: we are not yet ready. we validate it as just text
-      return createTextFn({
-        textErrorId: GenericErrorCode.InvalidValue,
-        maxLength: 10000,
-        minLength: 1,
-        regexp: undefined,
+      if (schema.maxValue !== undefined) {
+        maxValue = Math.round(schema.maxValue);
+      } else {
+        maxValue = DEFAULT_DAYS_RANGE;
+      }
+
+      if (schema.valueType === ValueType.Date) {
+        return createDateFn({
+          maxValue,
+          minValue,
+        });
+      }
+      return createTimestampFn({
+        maxValue,
+        minValue,
       });
   }
 }
@@ -103,20 +105,26 @@ export function createValidationFn(schema: ValueSchema): ValidationFn {
  * createXxxFn functions are  designed to minimize the scope of teh closure around the returned function
  */
 function createTextFn(schema: TextSchema): ValidationFn {
-  return (value: Value) => {
+  return (value: any) => {
     return validateString(schema, value);
   };
 }
 
 function createNumberFn(schema: NumberSchema): ValidationFn {
-  return (value: Value) => {
+  return (value: any) => {
     return validateNumber(schema, value);
   };
 }
 
 function createDateFn(schema: DateSchema): ValidationFn {
-  return (value: Value) => {
+  return (value: any) => {
     return validateDate(schema, value);
+  };
+}
+
+function createTimestampFn(schema: DateSchema): ValidationFn {
+  return (value: any) => {
+    return validateTimestamp(schema, value);
   };
 }
 
@@ -124,44 +132,46 @@ function createDateFn(schema: DateSchema): ValidationFn {
  * run-time validation functions that use our internal schema parameters
  */
 function validateString(schema: TextSchema, value: Value): ValidationResult {
-  if (value === undefined) {
-    return {
-      errorId: GenericErrorCode.InvalidValue,
-    };
+  if (value === undefined || value === null || Number.isNaN(value)) {
+    return TEXT_ERROR;
   }
 
-  const s = value.toString();
+  const s = value.toString().trim();
   const len = s.length;
   if (len < schema.minLength!) {
     return {
-      errorId: GenericErrorCode.MinLength,
-      params: [schema.minLength + ''],
+      error: {
+        code: ValueSchemaErrorCode.MinLength,
+        params: [schema.minLength + ''],
+      },
     };
   }
 
-  if (len < schema.maxLength!) {
+  if (len > schema.maxLength!) {
     return {
-      errorId: GenericErrorCode.MaxLength,
-      params: [schema.maxLength + ''],
+      error: {
+        code: ValueSchemaErrorCode.MaxLength,
+        params: [schema.maxLength + ''],
+      },
     };
   }
 
   if (schema.regexp && schema.regexp.test(s) === false) {
-    return { errorId: schema.textErrorId };
+    return TEXT_ERROR;
   }
 
   return { value: s };
 }
 
 function validateNumber(schema: NumberSchema, value: Value): ValidationResult {
-  const res = validateString(schema, value);
-  if (res.errorId) {
-    return res;
+  const str = (value + '').trim();
+  if (!NUMBER_REGEX.test(str)) {
+    return NUMBER_ERROR;
   }
 
-  let nbr = Number.parseFloat(res.value! as string);
+  let nbr = Number.parseFloat(str);
   if (Number.isNaN(nbr)) {
-    return { errorId: GenericErrorCode.InvalidNumber };
+    return NUMBER_ERROR;
   }
 
   //make it an integer or decimal to the right number of decimal places
@@ -169,15 +179,19 @@ function validateNumber(schema: NumberSchema, value: Value): ValidationResult {
 
   if (nbr < schema.minValue) {
     return {
-      errorId: GenericErrorCode.MinValue,
-      params: [schema.minValue + ''],
+      error: {
+        code: ValueSchemaErrorCode.MinValue,
+        params: [schema.minValue + ''],
+      },
     };
   }
 
   if (nbr > schema.maxValue) {
     return {
-      errorId: GenericErrorCode.MaxValue,
-      params: [schema.maxValue + ''],
+      error: {
+        code: ValueSchemaErrorCode.MaxValue,
+        params: [schema.maxValue + ''],
+      },
     };
   }
 
@@ -185,104 +199,131 @@ function validateNumber(schema: NumberSchema, value: Value): ValidationResult {
 }
 
 function validateBoolean(value: Value): ValidationResult {
-  if (value === undefined) {
-    return { errorId: GenericErrorCode.InvalidBoolean };
+  if (!value) {
+    return { value: false };
   }
 
-  const s = value.toString().toLowerCase();
+  const s = value.toString().trim().toLowerCase();
   if (s === 'true' || s == '1') {
     return { value: true };
   }
   if (s === 'false' || s == '0') {
     return { value: false };
   }
-  return { errorId: GenericErrorCode.InvalidBoolean };
+  return BOOL_ERROR;
 }
 
 function validateDate(schema: DateSchema, value: Value): ValidationResult {
-  const res = validateString(schema, value);
-  if (res.errorId) {
-    return res;
+  const str = (value + '').trim();
+  if (!DATE_REGEX.test(str)) {
+    return DATE_ERROR;
   }
-
-  //str is guaranteed to be yyyy-mm-dd
-  const str = res.value as string;
-  const arr = str.split('-');
-  const yyyy = Number.parseInt(arr[0], 10);
-  const mm = Number.parseInt(arr[1], 10) - 1; //month index
-  const dd = Number.parseInt(arr[2], 10);
-  const n = Date.parse(str + ZERO_TIME);
-  if (!n) {
-    return { errorId: GenericErrorCode.InvalidDate };
-  }
-
-  const date = new Date(yyyy, mm, dd, 0, 0, 0, 0);
+  const yyyy = Number.parseInt(str.substring(0, 4), 10);
+  const mm = Number.parseInt(str.substring(5, 7), 10) - 1; //month index
+  const dd = Number.parseInt(str.substring(8, 10), 10);
+  const dateMs = Date.UTC(yyyy, mm, dd);
+  const date = new Date(dateMs);
 
   if (
     dd !== date.getDate() ||
     mm !== date.getMonth() ||
     yyyy !== date.getFullYear()
   ) {
-    return { errorId: GenericErrorCode.InvalidDate };
+    return DATE_ERROR;
   }
 
-  const dateMs = date.valueOf();
-
-  //get local date, and construct a UTC for that that with zero time components
+  //get local date
   const now = new Date();
-  const nowMs = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    0,
-    0,
-    0,
-    0
-  ).valueOf();
+  const nowYear = now.getFullYear();
+  const nowMon = now.getMonth();
+  const nowDate = now.getDate();
 
-  // minValue is already in ms
-  if (dateMs < nowMs - schema.minValue) {
+  //Date constructor allows us to just add days to get the desired date object
+  let refMs = Date.UTC(nowYear, nowMon, nowDate + schema.minValue);
+  if (dateMs < refMs) {
     return {
-      errorId: GenericErrorCode.EarliestDate,
-      params: [schema.minValue.toString()],
+      error: {
+        code: ValueSchemaErrorCode.EarliestDate,
+        params: [new Date(refMs).toISOString().substring(0, 10)],
+      },
     };
   }
-
-  if (dateMs > nowMs + schema.maxValue) {
+  refMs = Date.UTC(nowYear, nowMon, nowDate + schema.maxValue);
+  if (dateMs > refMs) {
     return {
-      errorId: GenericErrorCode.LatestDate,
-      params: [schema.maxValue.toString()],
+      error: {
+        code: ValueSchemaErrorCode.LatestDate,
+        params: [new Date(refMs).toISOString().substring(0, 10)],
+      },
     };
   }
-
   // note that we use date-string as the value for date fields
   return { value: str };
 }
 
-const MS_PER_DAY = 24 * 60 * 60 * 100;
-// by default we allow  1000 years from current date as valid date
-const MAX_DATE_DIFF = 365000 * MS_PER_DAY;
+function validateTimestamp(schema: DateSchema, value: Value): ValidationResult {
+  const valueStr = (value + '').trim();
+  if (valueStr.length !== 24) {
+    return STAMP_ERROR;
+  }
+
+  let str = valueStr.substring(0, 10);
+  const res = validateDate(schema, str);
+  if (res.error) {
+    if (res.error.params) {
+      //max-min error
+      return res;
+    }
+    return STAMP_ERROR;
+  }
+
+  str = valueStr.substring(10, 24);
+  if (!TIME_REGEX.test(str)) {
+    return STAMP_ERROR;
+  }
+
+  const hrs = Number.parseInt(str.substring(1, 3), 10);
+  const mns = Number.parseInt(str.substring(4, 6), 10);
+  const secs = Number.parseFloat(str.substring(7, 13));
+  if (
+    hrs > 24 ||
+    mns > 59 ||
+    secs > 59 || //we will not validate leap second!!
+    (hrs === 24 && (mns > 0 || secs > 0))
+  ) {
+    return STAMP_ERROR;
+  }
+
+  return { value: valueStr };
+}
+
+function roundIt(n: number, factor: number): number {
+  return Math.round(n * factor) / factor;
+}
+
+const DEFAULT_FACTOR = 10 ** DEFAULT_NBR_DECIMALS;
 const NUMBER_REGEX = /^-?\d*\.?\d*$/;
 const DATE_REGEX = /^\d\d\d\d-\d\d-\d\d$/;
-const TIME_STAMP_REGEX =
-  /^\d\d\d\d-\d\d-\d\dT[0-2]\d:[0-5]\d:[0-6]\d\.\d\d\dZ$/;
-const ZERO_TIME = 'T00:00:00.000Z';
-const DEFAULT_MAX_LENGTH = 1000;
+const TIME_REGEX = /^T\d\d:\d\d:\d\d\.\d\d\dZ$/;
+
+const TEXT_ERROR = { error: { code: ValueSchemaErrorCode.InvalidText } };
+const BOOL_ERROR = { error: { code: ValueSchemaErrorCode.InvalidBoolean } };
+const NUMBER_ERROR = { error: { code: ValueSchemaErrorCode.InvalidNumber } };
+const DATE_ERROR = { error: { code: ValueSchemaErrorCode.InvalidDate } };
+const STAMP_ERROR = { error: { code: ValueSchemaErrorCode.InvalidTimestamp } };
 
 /**
  * type definitions internally used for improving code quality
  */
 type TextSchema = {
-  textErrorId: string;
   minLength: number;
   maxLength: number;
   regexp?: RegExp;
 };
 
-type DateSchema = TextSchema & {
+type DateSchema = {
   minValue: number;
   maxValue: number;
-  errorId: string;
 };
 
 type NumberSchema = DateSchema & {
