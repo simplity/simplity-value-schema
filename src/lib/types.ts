@@ -16,7 +16,7 @@
  * NOTE-3: for timestamp, date-part is validated like date.
  * Time part is validated for entire-day. No facility to restrict time-part.
  */
-export type ValidationFn = (value: any) => ValidationResult;
+export type SchemaValidationFn = (value: any) => SchemaValidationResult;
 export const DEFAULT_MAX_CHARS = 1000;
 export const DEFAULT_DAYS_RANGE = 365000;
 export const DEFAULT_MAX_NUMBER = Number.MAX_SAFE_INTEGER;
@@ -25,7 +25,7 @@ export const DEFAULT_NBR_DECIMALS = 2;
 /**
  * validation result. One of value or errors is undefined and the other would be non-undefined always.
  */
-export type ValidationResult = {
+export type SchemaValidationResult = {
   /**
    * parsed value in the right type. e.g value = 9 if input was '9.0123' for an integer
    * undefined in case of error
@@ -34,7 +34,7 @@ export type ValidationResult = {
   /**
    * error. undefined if value is not undefined.
    */
-  error?: ValueSchemaError;
+  error?: SchemaError;
 };
 
 /**
@@ -106,13 +106,24 @@ export type ValueSchema = {
    * numbers will be rounded based on this.
    */
   nbrDecimalPlaces?: number;
+
+  /**
+   * name of a validation function that is provided by the developer.
+   * this is not used by this module, but defined here for the sake of a common type definition
+   */
+  validationFn?: string;
+  /**
+   * error message id for any error other than the the one detected by the schema.
+   * this is NOT used by this module, but is defined here for the sake of a common type definition
+   */
+  errorId?: string;
 };
 
-export type ValueSchemaError = {
-  code: ValueSchemaErrorCode;
+export type SchemaError = {
+  code: SchemaErrorCode;
   params?: string[];
 };
-export enum ValueSchemaErrorCode {
+export enum SchemaErrorCode {
   InvalidText = '_invalidText',
   InvalidBoolean = '_invalidBoolean',
   InvalidNumber = '_invalidNumber',

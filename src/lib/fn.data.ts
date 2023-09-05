@@ -2,7 +2,7 @@ import {
   Value,
   ValueSchema,
   ValueType,
-  ValueSchemaErrorCode,
+  SchemaErrorCode,
   DEFAULT_MAX_CHARS,
   DEFAULT_MAX_NUMBER,
   DEFAULT_DAYS_RANGE,
@@ -16,7 +16,7 @@ type OkTest = {
 
 type NotOkTest = {
   value: any;
-  errorId: ValueSchemaErrorCode;
+  errorId: SchemaErrorCode;
   params?: string[];
 };
 
@@ -80,24 +80,32 @@ const ZERO_TIME = 'T00:00:00.000Z';
 const VALID_TIME = 'T21:34:52.895Z';
 
 //error codes
-const TEXT_ERR = ValueSchemaErrorCode.InvalidText;
-const NUMBER_ERR = ValueSchemaErrorCode.InvalidNumber;
-const BOOL_ERR = ValueSchemaErrorCode.InvalidBoolean;
-const DATE_ERR = ValueSchemaErrorCode.InvalidDate;
-const STAMP_ERR = ValueSchemaErrorCode.InvalidTimestamp;
-const MIN_LEN_ERR = ValueSchemaErrorCode.MinLength;
-const MAX_LEN_ERR = ValueSchemaErrorCode.MaxLength;
-const MIN_VAL_ERR = ValueSchemaErrorCode.MinValue;
-const MAX_VAL_ERROR = ValueSchemaErrorCode.MaxValue;
-const EARLY_ERROR = ValueSchemaErrorCode.EarliestDate;
-const LATE_ERROR = ValueSchemaErrorCode.LatestDate;
+const TEXT_ERR = SchemaErrorCode.InvalidText;
+const NUMBER_ERR = SchemaErrorCode.InvalidText;
+const BOOL_ERR = SchemaErrorCode.InvalidBoolean;
+const DATE_ERR = SchemaErrorCode.InvalidDate;
+const STAMP_ERR = SchemaErrorCode.InvalidTimestamp;
+const MIN_LEN_ERR = SchemaErrorCode.MinLength;
+const MAX_LEN_ERR = SchemaErrorCode.MaxLength;
+const MIN_VAL_ERR = SchemaErrorCode.MinValue;
+const MAX_VAL_ERROR = SchemaErrorCode.MaxValue;
+const EARLY_ERROR = SchemaErrorCode.EarliestDate;
+const LATE_ERROR = SchemaErrorCode.LatestDate;
+
+//value Types
+const TEXT = ValueType.Text;
+const INT = ValueType.Integer;
+const DECIMAL = ValueType.Decimal;
+const BOOL = ValueType.Boolean;
+const DATE = ValueType.Date;
+const STAMP = ValueType.Timestamp;
 
 export const testSets: TestSets = {
   boolean: [
     {
       description: 'default boolean schema',
       schema: {
-        valueType: ValueType.Boolean,
+        valueType: BOOL,
       },
       notOkTests: [
         {
@@ -184,7 +192,7 @@ export const testSets: TestSets = {
       description:
         'boolean with max/min length. expect the lengths to be ignored',
       schema: {
-        valueType: ValueType.Boolean,
+        valueType: BOOL,
         minLength: 10,
         maxLength: 100,
       },
@@ -205,7 +213,7 @@ export const testSets: TestSets = {
     {
       description: `default text-type. expect min-length as 0 and max length as ${DEFAULT_MAX_CHARS}`,
       schema: {
-        valueType: ValueType.Text,
+        valueType: TEXT,
       },
       okTests: [
         { value: '' },
@@ -229,7 +237,7 @@ export const testSets: TestSets = {
     {
       description: 'min 4 and max 9 characters with no regex',
       schema: {
-        valueType: ValueType.Text,
+        valueType: TEXT,
         minLength: 4,
         maxLength: 9,
       },
@@ -293,7 +301,7 @@ export const testSets: TestSets = {
     {
       description: 'PAN of type xxxxxnnnnx',
       schema: {
-        valueType: ValueType.Text,
+        valueType: TEXT,
         regex: '^[a-z]{5}[0-9]{4}[a-zA-Z]$', //this requires exactly 10 characters
         maxLength: 15, //deliberately given more to test the behavior
         minLength: 5, //likewise min length
@@ -327,7 +335,7 @@ export const testSets: TestSets = {
     {
       description:
         'schema has max less than min, hence no string would be valid',
-      schema: { valueType: ValueType.Text, minLength: 2, maxLength: 1 },
+      schema: { valueType: TEXT, minLength: 2, maxLength: 1 },
       okTests: [],
       notOkTests: [
         {
@@ -348,7 +356,7 @@ export const testSets: TestSets = {
       //default minValue is 0, and max is SAFE_INTEGER
       description: 'default integer',
       schema: {
-        valueType: ValueType.Integer,
+        valueType: INT,
       },
       okTests: [
         { value: 0 },
@@ -382,7 +390,7 @@ export const testSets: TestSets = {
     {
       description: 'min 18 and max 150',
       schema: {
-        valueType: ValueType.Integer,
+        valueType: INT,
         minValue: 18,
         maxValue: 150,
       },
@@ -404,7 +412,7 @@ export const testSets: TestSets = {
     {
       description: 'testing with -ve min and +ve max with decimal places',
       schema: {
-        valueType: ValueType.Integer,
+        valueType: INT,
         minValue: -10.192, //this is to be rounded to -10
         maxValue: 9.611, ///this is to be rounded to 10
       },
@@ -440,7 +448,7 @@ export const testSets: TestSets = {
     {
       description: 'min and max are -ve. nbrDecimal places is to be ignored',
       schema: {
-        valueType: ValueType.Integer,
+        valueType: INT,
         minValue: -100,
         maxValue: -10,
         nbrDecimalPlaces: 10, //to be ignored, as this is an integer
@@ -474,7 +482,7 @@ export const testSets: TestSets = {
     },
     {
       description: 'min is more than max. no valid numbers',
-      schema: { valueType: ValueType.Integer, minValue: 10, maxValue: 1 },
+      schema: { valueType: INT, minValue: 10, maxValue: 1 },
       okTests: [],
       notOkTests: [
         { value: -11, errorId: MIN_VAL_ERR, params: ['10'] },
@@ -499,7 +507,7 @@ export const testSets: TestSets = {
     {
       description: 'default decimal',
       schema: {
-        valueType: ValueType.Decimal,
+        valueType: DECIMAL,
       },
       okTests: [
         { value: 0 },
@@ -537,7 +545,7 @@ export const testSets: TestSets = {
     {
       description: 'decimal with +ve min/max values',
       schema: {
-        valueType: ValueType.Decimal,
+        valueType: DECIMAL,
         nbrDecimalPlaces: 4,
         minValue: 18,
         maxValue: 150,
@@ -584,7 +592,7 @@ export const testSets: TestSets = {
     {
       description: 'min is -ve max is +ve.',
       schema: {
-        valueType: ValueType.Decimal,
+        valueType: DECIMAL,
         nbrDecimalPlaces: -10, //must be reset to default of 2
         minValue: -10.229, //expect this to be rounded to 10.23
         maxValue: 10.35198, //expect this to be rounded to 10.35
@@ -632,7 +640,7 @@ export const testSets: TestSets = {
     {
       description: 'min and max are -ve',
       schema: {
-        valueType: ValueType.Decimal,
+        valueType: DECIMAL,
         minValue: -100.11119, //to be rounded to -100.11
         maxValue: -10,
       },
@@ -672,7 +680,7 @@ export const testSets: TestSets = {
     {
       description: 'default date',
       schema: {
-        valueType: ValueType.Date,
+        valueType: DATE,
       },
       okTests: [
         { value: TODAY },
@@ -719,7 +727,7 @@ export const testSets: TestSets = {
     {
       description: 'dates in the future, including today',
       schema: {
-        valueType: ValueType.Date,
+        valueType: DATE,
         minValue: 0,
         maxValue: 10,
       },
@@ -745,7 +753,7 @@ export const testSets: TestSets = {
     {
       description: 'dates in the past, including today',
       schema: {
-        valueType: ValueType.Date,
+        valueType: DATE,
         minValue: -20,
         maxValue: 0,
       },
@@ -772,7 +780,7 @@ export const testSets: TestSets = {
   timestamp: [
     {
       description: 'default time-stamp',
-      schema: { valueType: ValueType.Timestamp },
+      schema: { valueType: STAMP },
       okTests: [
         { value: NOW },
         { value: NOW_MINUS_20 },
