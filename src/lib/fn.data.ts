@@ -81,7 +81,7 @@ const VALID_TIME = 'T21:34:52.895Z';
 
 //error codes
 const TEXT_ERR = SchemaErrorCode.InvalidText;
-const NUMBER_ERR = SchemaErrorCode.InvalidText;
+const NUMBER_ERR = SchemaErrorCode.InvalidNumber;
 const BOOL_ERR = SchemaErrorCode.InvalidBoolean;
 const DATE_ERR = SchemaErrorCode.InvalidDate;
 const STAMP_ERR = SchemaErrorCode.InvalidTimestamp;
@@ -814,7 +814,7 @@ export const testSets: TestSets = {
           errorId: STAMP_ERR,
         },
         {
-          value: '2000-12-20T:13:14.123Z',
+          value: '2000-12-20Taa:13:14.123Z',
           errorId: STAMP_ERR,
         },
         {

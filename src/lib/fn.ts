@@ -144,7 +144,7 @@ function validateString(
   if (len < schema.minLength!) {
     return {
       error: {
-        code: SchemaErrorCode.MinValue,
+        code: SchemaErrorCode.MinLength,
         params: [schema.minLength + ''],
       },
     };
